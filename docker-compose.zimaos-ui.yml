@@ -22,16 +22,14 @@ services:
       - type: bind
         source: /media/ZimaOS-HD/AppData/ish_ytdlp/downloads
         target: /downloads
-    secrets:
-      - first_admin_password
+      - type: bind
+        source: /media/ZimaOS-HD/AppData/ish_ytdlp/secrets/admin_password.txt
+        target: /run/secrets/first_admin_password
+        read_only: true
     network_mode: bridge
     privileged: false
     labels:
       icon: https://images.icon-icons.com/1495/PNG/512/youtubedl_102951.png
-
-secrets:
-  first_admin_password:
-    file: /media/ZimaOS-HD/AppData/ish_ytdlp/secrets/admin_password.txt
 
 x-casaos:
   author: self
