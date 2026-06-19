@@ -624,6 +624,6 @@ def delete_user(user_id: int, admin: dict[str, Any] = Depends(require_admin)) ->
 @app.middleware("http")
 async def no_store_api(request: Request, call_next: Any) -> Response:
     response = await call_next(request)
-    if request.url.path.startswith("/api/"):
+    if request.url.path.startswith("/api/") or request.url.path.startswith("/static/"):
         response.headers["Cache-Control"] = "no-store"
     return response
