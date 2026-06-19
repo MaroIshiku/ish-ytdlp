@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>YTDLP Client</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <main id="loginView" class="login-shell" hidden>
+      <section class="login-panel">
+        <div class="brand-mark">YT</div>
+        <h1>YTDLP Client</h1>
+        <form id="loginForm" class="stack">
+          <label>
+            Benutzername
+            <input name="username" autocomplete="username" required />
+          </label>
+          <label>
+            Passwort
+            <input name="password" type="password" autocomplete="current-password" required />
+          </label>
+          <button class="primary" type="submit">Anmelden</button>
+          <p id="loginError" class="error" role="alert"></p>
+        </form>
+      </section>
+    </main>
+
+    <main id="appView" class="app-shell" hidden>
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">Self-hosted</div>
+          <h1>YTDLP Client</h1>
+        </div>
+        <div class="session-box">
+          <span id="currentUser"></span>
+          <button id="logoutButton" class="ghost" type="button">Abmelden</button>
+        </div>
+      </header>
+
+      <section class="workspace">
+        <aside class="panel submit-panel">
+          <h2>Neuer Download</h2>
+          <form id="downloadForm" class="stack">
+            <label>
+              URL
+              <input name="url" type="url" placeholder="https://..." required />
+            </label>
+            <label>
+              Format
+              <select name="mode">
+                <option value="best">Bestes Video</option>
+                <option value="mp4">MP4 Video</option>
+                <option value="audio_mp3">MP3 Audio</option>
+                <option value="audio_m4a">M4A Audio</option>
+              </select>
+            </label>
+            <label class="checkbox-row">
+              <input name="playlist" type="checkbox" />
+              Playlist erlauben
+            </label>
+            <button class="primary" type="submit">Zur Queue</button>
+            <p id="downloadError" class="error" role="alert"></p>
+          </form>
+        </aside>
+
+        <section class="panel queue-panel">
+          <div class="section-head">
+            <h2>Queue</h2>
+            <button id="refreshButton" class="ghost" type="button">Aktualisieren</button>
+          </div>
+          <div id="downloadList" class="download-list"></div>
+        </section>
+
+        <aside class="side-column">
+          <section class="panel">
+            <div class="section-head">
+              <h2>Dateien</h2>
+              <button id="refreshFilesButton" class="ghost" type="button">Neu laden</button>
+            </div>
+            <div id="fileList" class="file-list"></div>
+          </section>
+
+          <section id="adminPanel" class="panel" hidden>
+            <h2>Benutzer</h2>
+            <form id="userForm" class="stack compact-form">
+              <input name="username" placeholder="Benutzername" required minlength="3" />
+              <input name="password" type="password" placeholder="Passwort" required minlength="10" />
+              <label class="checkbox-row">
+                <input name="is_admin" type="checkbox" />
+                Admin
+              </label>
+              <button class="primary" type="submit">Erstellen</button>
+              <p id="userError" class="error" role="alert"></p>
+            </form>
+            <div id="userList" class="user-list"></div>
+          </section>
+        </aside>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+data/
+!data/
+!data/.gitkeep
+downloads/
+!downloads/
+!downloads/.gitkeep
+secrets/*.txt
+!secrets/.gitkeep
+.testdata/
+.testdownloads/
+.tools/

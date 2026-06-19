@@ -1,0 +1,48 @@
+name: ish_ytdlp
+services:
+  ish-ytdlp:
+    image: ghcr.io/maroishiku/ish-ytdlp:latest
+    container_name: ish-ytdlp
+    restart: unless-stopped
+    ports:
+      - target: 8080
+        published: "8180"
+        protocol: tcp
+    environment:
+      APP_DATA_DIR: /data
+      DOWNLOAD_DIR: /downloads
+      FIRST_ADMIN_USERNAME: admin
+      FIRST_ADMIN_PASSWORD_FILE: /run/secrets/first_admin_password
+      SESSION_DAYS: 14
+      TZ: Europe/Berlin
+    volumes:
+      - type: bind
+        source: /media/ZimaOS-HD/AppData/ish_ytdlp/data
+        target: /data
+      - type: bind
+        source: /media/ZimaOS-HD/AppData/ish_ytdlp/downloads
+        target: /downloads
+    secrets:
+      - first_admin_password
+    network_mode: bridge
+    privileged: false
+    labels:
+      icon: https://images.icon-icons.com/1495/PNG/512/youtubedl_102951.png
+
+secrets:
+  first_admin_password:
+    file: /media/ZimaOS-HD/AppData/ish_ytdlp/secrets/admin_password.txt
+
+x-casaos:
+  author: self
+  category: self
+  hostname: ""
+  icon: https://images.icon-icons.com/1495/PNG/512/youtubedl_102951.png
+  index: /
+  is_uncontrolled: false
+  port_map: "8180"
+  scheme: http
+  store_app_id: ish_ytdlp
+  title:
+    custom: ish_ytdlp
+    en_us: ish_ytdlp
