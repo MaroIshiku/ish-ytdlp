@@ -217,7 +217,7 @@ $("#loginForm").addEventListener("submit", async (event) => {
       }),
     });
     state.user = payload.user;
-    loginForm.reset();
+    loginForm?.reset();
     showApp();
     await refreshAll();
     state.poller = setInterval(refreshAll, 2500);
@@ -246,7 +246,7 @@ $("#downloadForm").addEventListener("submit", async (event) => {
         playlist: form.get("playlist") === "on",
       }),
     });
-    downloadForm.reset();
+    downloadForm?.reset();
     await loadDownloads();
   } catch (error) {
     $("#downloadError").textContent = error.message;
@@ -289,7 +289,7 @@ $("#userForm").addEventListener("submit", async (event) => {
         is_admin: form.get("is_admin") === "on",
       }),
     });
-    userForm.reset();
+    userForm?.reset();
     await loadUsers();
   } catch (error) {
     $("#userError").textContent = error.message;
