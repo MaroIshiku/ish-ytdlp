@@ -9,14 +9,18 @@ const state = {
 const $ = (selector) => document.querySelector(selector);
 
 async function loadVersion() {
-  const target = $("#versionBadge");
-  if (!target) return;
+  const targets = document.querySelectorAll("[data-version]");
+  if (!targets.length) return;
   try {
     const payload = await api("/api/health");
     const shortSha = payload.build_sha ? payload.build_sha.slice(0, 7) : "dev";
-    target.textContent = `v${payload.version || "0.1.0"} · ${shortSha}`;
+    targets.forEach((target) => {
+      target.textContent = `v${payload.version || "0.1.0"} · ${shortSha}`;
+    });
   } catch {
-    target.textContent = "Version unbekannt";
+    targets.forEach((target) => {
+      target.textContent = "Version unbekannt";
+    });
   }
 }
 
