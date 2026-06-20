@@ -79,10 +79,6 @@ select {
   outline: none;
 }
 
-summary {
-  cursor: pointer;
-}
-
 input:focus,
 select:focus {
   border-color: var(--accent);
@@ -201,38 +197,45 @@ h2 {
   gap: 18px;
 }
 
-.settings-popover {
-  position: relative;
+.submit-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
 }
 
-.settings-popover summary {
-  min-height: 42px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: start center;
+  padding: 110px 18px 58px;
+}
+
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 10, 12, 0.66);
+  backdrop-filter: blur(3px);
+}
+
+.settings-dialog {
+  position: relative;
+  z-index: 1;
+  width: min(720px, calc(100vw - 36px));
+  max-height: min(720px, calc(100vh - 150px));
+  overflow: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 0 12px;
-  color: var(--text);
-  list-style: none;
-}
-
-.settings-popover summary::-webkit-details-marker {
-  display: none;
-}
-
-.settings-popover summary::after {
-  content: "Filter";
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 800;
-  text-transform: uppercase;
+  background: rgba(25, 29, 34, 0.98);
+  box-shadow: var(--shadow);
+  padding: 18px;
 }
 
 .settings-grid {
   display: grid;
   gap: 12px;
-  margin-top: 12px;
+  margin-top: 16px;
 }
 
 .section-head {
@@ -446,18 +449,8 @@ h2 {
     overflow: auto;
   }
 
-  .settings-popover[open] .settings-grid {
-    position: absolute;
-    z-index: 10;
-    right: 0;
-    left: 0;
-    max-height: min(520px, calc(100vh - 300px));
-    overflow: auto;
-    padding: 14px;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: rgba(25, 29, 34, 0.98);
-    box-shadow: var(--shadow);
+  .settings-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -493,5 +486,15 @@ h2 {
 
   .system-footer {
     font-size: 0.68rem;
+  }
+
+  .settings-overlay {
+    align-items: stretch;
+    padding: 86px 12px 54px;
+  }
+
+  .settings-dialog {
+    width: 100%;
+    max-height: calc(100vh - 132px);
   }
 }

@@ -7,6 +7,13 @@ const state = {
 
 const $ = (selector) => document.querySelector(selector);
 
+const compatibleVideoCodecs = {
+  auto: ["auto", "h264", "h265", "av1", "vp9"],
+  mp4: ["auto", "h264", "h265", "av1"],
+  webm: ["auto", "vp9", "av1"],
+  mkv: ["auto", "h264", "h265", "av1", "vp9"],
+};
+
 async function loadVersion() {
   const targets = document.querySelectorAll("[data-version]");
   if (!targets.length) return;
@@ -18,7 +25,8 @@ async function loadVersion() {
       : "unknown";
     const impersonation = payload.curl_cffi_available ? "impersonation ok" : "impersonation missing";
     const deno = payload.deno_version && payload.deno_version !== "unavailable" ? "deno ok" : "deno missing";
-    const label = `yt-dlp ${payload.yt_dlp_version || "unknown"} | YTDLP Client ${payload.version || "0.1.0"} ${shortSha} | updated ${buildDate} | ${impersonation} | ${deno}`;
+    const publicIp = payload.public_ip || "unavailable";
+    const label = `yt-dlp ${payload.yt_dlp_version || "unknown"} | YTDLP Client ${payload.version || "0.1.0"} ${shortSha} | updated ${buildDate} | public ip ${publicIp} | ${impersonation} | ${deno}`;
     targets.forEach((target) => {
       target.textContent = label;
     });
@@ -91,18 +99,47 @@ function settingsLabel(settings = {}) {
 }
 
 function updateSettingVisibility() {
-  const mediaType = $("#mediaType")?.value || "auto";
-  const settingsPopover = $(".settings-popover");
-  if (settingsPopover) {
-    settingsPopover.hidden = mediaType === "auto";
-    if (mediaType === "auto") {
-      settingsPopover.open = false;
-    }
-  }
+  const mediaType = $("#mediaType")?.value || "video";
   document.querySelectorAll("[data-setting-group]").forEach((element) => {
     const group = element.dataset.settingGroup;
     element.hidden = mediaType !== group;
   });
+  updateVideoCodecOptions();
+  updateAudioBitrateState();
+}
+
+function updateVideoCodecOptions() {
+  const format = $("#videoFormat")?.value || "auto";
+  const codec = $("#videoCodec");
+  if (!codec) return;
+  const allowed = compatibleVideoCodecs[format] || compatibleVideoCodecs.auto;
+  Array.from(codec.options).forEach((option) => {
+    option.disabled = !allowed.includes(option.value);
+  });
+  if (!allowed.includes(codec.value)) {
+    codec.value = "auto";
+  }
+}
+
+function updateAudioBitrateState() {
+  const format = $("#audioFormat")?.value || "auto";
+  const bitrate = $("#audioBitrate");
+  if (!bitrate) return;
+  const isLossless = ["flac", "wav"].includes(format);
+  bitrate.disabled = isLossless;
+  if (isLossless) {
+    bitrate.value = "auto";
+  }
+}
+
+function openSettings() {
+  $("#settingsOverlay").hidden = false;
+  updateSettingVisibility();
+  $("#mediaType")?.focus();
+}
+
+function closeSettings() {
+  $("#settingsOverlay").hidden = true;
 }
 
 async function api(path, options = {}) {
@@ -311,6 +348,7 @@ $("#downloadForm").addEventListener("submit", async (event) => {
     });
     downloadForm?.reset();
     updateSettingVisibility();
+    closeSettings();
     await loadDownloads();
   } catch (error) {
     $("#downloadError").textContent = error.message;
@@ -338,16 +376,20 @@ $("#downloadList").addEventListener("click", async (event) => {
 
 $("#refreshButton").addEventListener("click", loadDownloads);
 $("#mediaType").addEventListener("change", updateSettingVisibility);
-
-const settingsPopover = $(".settings-popover");
-if (settingsPopover && window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
-  settingsPopover.addEventListener("mouseenter", () => {
-    settingsPopover.open = true;
-  });
-  settingsPopover.addEventListener("mouseleave", () => {
-    settingsPopover.open = false;
-  });
-}
+$("#videoFormat").addEventListener("change", updateVideoCodecOptions);
+$("#audioFormat").addEventListener("change", updateAudioBitrateState);
+$("#settingsButton").addEventListener("click", openSettings);
+$("#settingsCloseButton").addEventListener("click", closeSettings);
+$("#settingsOverlay").addEventListener("click", (event) => {
+  if (event.target.matches("[data-settings-close]")) {
+    closeSettings();
+  }
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !$("#settingsOverlay").hidden) {
+    closeSettings();
+  }
+});
 
 $("#userForm").addEventListener("submit", async (event) => {
   event.preventDefault();

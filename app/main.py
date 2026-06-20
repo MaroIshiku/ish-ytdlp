@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlparse
+from urllib.request import urlopen
 
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse
@@ -45,6 +46,8 @@ stop_worker = threading.Event()
 active_lock = threading.Lock()
 active_process: subprocess.Popen[str] | None = None
 active_download_id: int | None = None
+public_ip_lock = threading.Lock()
+public_ip_cache: dict[str, Any] = {"value": "unavailable", "expires_at": 0.0}
 
 
 class LoginPayload(BaseModel):
@@ -56,7 +59,7 @@ class DownloadPayload(BaseModel):
     url: str = Field(min_length=8, max_length=4096)
     mode: str = "best"
     playlist: bool = False
-    media_type: Literal["auto", "video", "audio", "captions", "thumbnail"] = "auto"
+    media_type: Literal["auto", "video", "audio", "captions", "thumbnail"] = "video"
     video_format: Literal["auto", "mp4", "webm", "mkv"] = "auto"
     video_codec: Literal["auto", "h264", "h265", "av1", "vp9"] = "auto"
     video_quality: Literal["auto", "2160", "1440", "1080", "720", "480", "360"] = "auto"
@@ -288,6 +291,8 @@ def normalize_download_options(payload: DownloadPayload) -> dict[str, str]:
         video_codec = settings["video_codec"]
         if video_format != "auto" and video_codec != "auto" and video_codec not in VIDEO_FORMAT_CODECS[video_format]:
             raise HTTPException(status_code=400, detail=f"{video_codec} is not compatible with {video_format}")
+    if media_type == "audio" and settings["audio_format"] in {"flac", "wav"}:
+        settings["audio_bitrate"] = "auto"
     return settings
 
 
@@ -788,6 +793,29 @@ def command_version(command: list[str]) -> str | None:
     return None
 
 
+def public_ip() -> str:
+    now = time.time()
+    with public_ip_lock:
+        if public_ip_cache["expires_at"] > now:
+            return public_ip_cache["value"]
+
+    value = "unavailable"
+    expires_at = now + 60
+    try:
+        with urlopen("https://api.ipify.org", timeout=2) as response:
+            candidate = response.read(64).decode("utf-8", errors="ignore").strip()
+        if re.fullmatch(r"[0-9A-Fa-f:.]{3,45}", candidate):
+            value = candidate
+            expires_at = now + 300
+    except OSError:
+        pass
+
+    with public_ip_lock:
+        public_ip_cache["value"] = value
+        public_ip_cache["expires_at"] = expires_at
+    return value
+
+
 def system_info() -> dict[str, Any]:
     return {
         "status": "ok",
@@ -801,6 +829,7 @@ def system_info() -> dict[str, Any]:
         "yt_dlp_ejs_version": package_version("yt-dlp-ejs") or "unavailable",
         "deno_version": command_version(["deno", "--version"]) or "unavailable",
         "ffmpeg_version": command_version(["ffmpeg", "-version"]) or "unavailable",
+        "public_ip": public_ip(),
     }
 
 

@@ -19,7 +19,7 @@ This app was created with AI assistance. Feature requests are unlikely to be han
 - optional playlist downloads
 - live status with progress, speed, and ETA
 - file size and download button directly on completed queue entries
-- system footer with app version, build commit, build date, and yt-dlp version
+- system footer with app version, build commit, build date, public IP, and yt-dlp version
 - persistent SQLite database in `data/` inside `/media/ZimaOS-HD/AppData/ish_ytdlp`
 - downloads in `downloads/` inside `/media/ZimaOS-HD/AppData/ish_ytdlp`
 
