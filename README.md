@@ -1,47 +1,46 @@
 # YTDLP Client
 
-Self-hosted WebUI fuer `yt-dlp`, gebaut fuer Docker und ZimaOS.
+Self-hosted `yt-dlp` WebUI built for Docker and ZimaOS.
 
-## Hinweis
+## Notice
 
-Diese App wurde von KI erstellt. Feature-Requests werden mit hoher Wahrscheinlichkeit nicht bearbeitet. Bugfixes, Wartung und andere Aenderungen erfolgen unregelmaessig oder moeglicherweise gar nicht.
+This app was created with AI assistance. Feature requests are unlikely to be handled. Bug fixes, maintenance, and other changes may happen irregularly or not at all.
 
-## Funktionen
+## Features
 
-- Login-Seite mit Session-Cookie
-- erster Benutzer wird beim ersten Start als Admin aus einem Docker-Secret erstellt
-- Admins koennen weitere Benutzer erstellen, Passwoerter setzen und Benutzer loeschen
-- Download-Queue fuer Video, MP4, MP3 und M4A
-- Download-Optionen fuer Auto, Video, Audio, Captions und Thumbnails
-- Video-Optionen fuer Container, Codec und maximale Aufloesung
-- Audio-Optionen fuer Format und Bitrate
-- Caption-Optionen fuer Sprache und Ausgabeformat
-- optionaler Playlist-Download
-- Live-Status mit Fortschritt, Geschwindigkeit und ETA
-- benutzergetrennte Download-Historie: Benutzer sehen nur ihre eigenen Queue-Eintraege
-- Dateigroesse und Download-Button direkt an abgeschlossenen Queue-Eintraegen
-- System-Footer mit App-Version, Build-Commit, Build-Datum und yt-dlp-Version
-- persistente SQLite-Datenbank in `data/` innerhalb von `/media/ZimaOS-HD/AppData/ish_ytdlp`
-- Downloads in `downloads/` innerhalb von `/media/ZimaOS-HD/AppData/ish_ytdlp`
+- Login page with session cookie authentication
+- first user is created as admin from a Docker secret on first start
+- admins can create users, reset passwords, and delete users
+- user-scoped download history: users only see their own queue entries
+- download queue for auto, video, audio, captions, and thumbnails
+- video options for container, codec, and maximum resolution
+- audio options for format and bitrate
+- caption options for language and output format
+- optional playlist downloads
+- live status with progress, speed, and ETA
+- file size and download button directly on completed queue entries
+- system footer with app version, build commit, build date, and yt-dlp version
+- persistent SQLite database in `data/` inside `/media/ZimaOS-HD/AppData/ish_ytdlp`
+- downloads in `downloads/` inside `/media/ZimaOS-HD/AppData/ish_ytdlp`
 
-## Start auf ZimaOS / Docker
+## Start on ZimaOS / Docker
 
-Wichtig: Die ZimaOS/CasaOS-App-UI kann lokale Docker-Builds oft nicht ausfuehren. Dann darf die importierte YAML kein `build:` enthalten, sondern muss auf ein bereits gebautes Image zeigen, zum Beispiel `ghcr.io/dein-name/ish-ytdlp:latest`.
+Important: the ZimaOS/CasaOS app UI often cannot run local Docker builds. In that case the imported YAML must not contain `build:` and must point to an already published image, for example `ghcr.io/maroishiku/ish-ytdlp:latest`.
 
-Es gibt zwei Wege:
+There are two supported paths:
 
-- Terminal auf ZimaOS: `docker-compose.yml` nutzen und lokal bauen.
-- ZimaOS UI: `docker-compose.zimaos-ui.yml` nutzen und vorher ein Image in eine Registry pushen.
+- ZimaOS terminal: use `docker-compose.yml` and build locally.
+- ZimaOS UI: use `docker-compose.zimaos-ui.yml` after the image has been built and pushed by GitHub Actions.
 
-1. Projekt nach ZimaOS kopieren:
+1. Place the project on ZimaOS:
 
    ```text
    /media/ZimaOS-HD/AppData/ish_ytdlp
    ```
 
-2. Passwort-Secret anpassen:
+2. Configure the password secret:
 
-   Falls die Ordner noch nicht existieren:
+   If the folders do not exist yet:
 
    ```bash
    mkdir -p /media/ZimaOS-HD/AppData/ish_ytdlp/data
@@ -49,53 +48,55 @@ Es gibt zwei Wege:
    mkdir -p /media/ZimaOS-HD/AppData/ish_ytdlp/secrets
    ```
 
+   On Windows:
+
    ```powershell
-   Set-Content -Path .\secrets\admin_password.txt -Value "ein-sehr-langes-admin-passwort"
+   Set-Content -Path .\secrets\admin_password.txt -Value "a-long-initial-admin-password"
    ```
 
-   Auf Linux/macOS:
+   On Linux/macOS:
 
    ```bash
-   printf '%s\n' 'ein-sehr-langes-admin-passwort' > secrets/admin_password.txt
+   printf '%s\n' 'a-long-initial-admin-password' > secrets/admin_password.txt
    ```
 
-   Auf ZimaOS/Linux:
+   On ZimaOS/Linux:
 
    ```bash
-   printf '%s\n' 'ein-sehr-langes-admin-passwort' > /media/ZimaOS-HD/AppData/ish_ytdlp/secrets/admin_password.txt
+   printf '%s\n' 'a-long-initial-admin-password' > /media/ZimaOS-HD/AppData/ish_ytdlp/secrets/admin_password.txt
    ```
 
-3. Container per Terminal starten:
+3. Start the container from a terminal:
 
    ```bash
    cd /media/ZimaOS-HD/AppData/ish_ytdlp
    docker compose up -d --build
    ```
 
-   Wenn du stattdessen die ZimaOS-UI nutzt, muss das Image vorher durch GitHub Actions gebaut worden sein:
+   If you use the ZimaOS UI instead, the image must already have been built by GitHub Actions:
 
    ```yaml
    image: ghcr.io/maroishiku/ish-ytdlp:latest
    ```
 
-4. WebUI oeffnen:
+4. Open the WebUI:
 
    ```text
    http://<zimaos-ip>:8180
    ```
 
-5. Initial anmelden:
+5. Initial login:
 
    ```text
-   Benutzer: admin
-   Passwort: Inhalt aus secrets/admin_password.txt
+   Username: admin
+   Password: contents of secrets/admin_password.txt
    ```
 
-Nach dem ersten Start wird der Admin in SQLite gespeichert. Eine spaetere Aenderung des Secret-Files aendert bestehende Passwoerter nicht automatisch; das erledigst du im Admin-Bereich.
+After the first start, the admin user is stored in SQLite. Changing the secret file later does not change existing passwords automatically; use the admin area for that.
 
 ## Docker Compose
 
-Der relevante Teil fuer Terminal-Builds ist in [docker-compose.yml](docker-compose.yml) enthalten:
+The relevant terminal-build section in [docker-compose.yml](docker-compose.yml) is:
 
 ```yaml
 build:
@@ -113,58 +114,58 @@ ports:
   - "8180:8080"
 ```
 
-Die Compose-Datei verweist bewusst absolut auf `/media/ZimaOS-HD/AppData/ish_ytdlp`. Dadurch funktioniert sie auch dann eindeutig, wenn ZimaOS/CasaOS die YAML importiert oder aus einem anderen Arbeitsverzeichnis startet.
+The Compose file intentionally uses absolute paths to `/media/ZimaOS-HD/AppData/ish_ytdlp`. This keeps it unambiguous when ZimaOS/CasaOS imports the YAML or starts it from another working directory.
 
-Fuer die ZimaOS-UI liegt eine separate Datei unter [docker-compose.zimaos-ui.yml](docker-compose.zimaos-ui.yml). Diese enthaelt kein `build:`, sondern nur `image:`. Ohne Registry-Image kann die ZimaOS-UI den Container nicht starten.
+For the ZimaOS UI, use [docker-compose.zimaos-ui.yml](docker-compose.zimaos-ui.yml). It does not contain `build:` and uses `image:` only. Without a registry image, the ZimaOS UI cannot start the container.
 
-## Image fuer ZimaOS-UI bauen
+## Build the Image for the ZimaOS UI
 
-### Automatisch ueber GitHub Actions
+### Automatically via GitHub Actions
 
-Dieses Projekt enthaelt einen Workflow unter `.github/workflows/publish-ghcr.yml`. Wenn du das Projekt nach GitHub pushst, baut GitHub automatisch ein Multi-Arch-Image fuer `linux/amd64` und `linux/arm64`.
+This project contains a workflow at `.github/workflows/publish-ghcr.yml`. Every push to GitHub builds a multi-arch image for `linux/amd64` and `linux/arm64`.
 
-Der Image-Name ist:
+The image name is:
 
 ```text
 ghcr.io/maroishiku/ish-ytdlp:latest
 ```
 
-Diesen Wert traegst du in [docker-compose.zimaos-ui.yml](docker-compose.zimaos-ui.yml) ein:
+Use this value in [docker-compose.zimaos-ui.yml](docker-compose.zimaos-ui.yml):
 
 ```yaml
 image: ghcr.io/maroishiku/ish-ytdlp:latest
 ```
 
-Falls das GHCR-Package privat ist, kann ZimaOS es nicht ohne Registry-Login ziehen. Am einfachsten stellst du das Package in GitHub auf public oder meldest Docker auf ZimaOS bei `ghcr.io` an.
+If the GHCR package is private, ZimaOS cannot pull it without a registry login. The easiest path is to make the package public in GitHub or log Docker in to `ghcr.io` on ZimaOS.
 
-## yt-dlp Abhaengigkeiten
+## yt-dlp Dependencies
 
-Das Docker-Image installiert `yt-dlp[default,curl-cffi]`. Dadurch sind die von yt-dlp empfohlenen Standard-Abhaengigkeiten sowie `curl_cffi` fuer Browser-Impersonation enthalten. Das hilft bei Seiten, die TLS-Fingerprinting einsetzen und sonst Meldungen wie `The extractor is attempting impersonation, but no impersonate target is available` ausgeben.
+The Docker image installs `yt-dlp[default,curl-cffi]`. This includes the recommended default yt-dlp dependencies and `curl_cffi` for browser impersonation. It helps with sites that use TLS fingerprinting and otherwise show errors such as `The extractor is attempting impersonation, but no impersonate target is available`.
 
-Zusaetzlich enthaelt das Image:
+The image also includes:
 
-- `ffmpeg` und `ffprobe` fuer Merging und Post-Processing
-- `yt-dlp-ejs` ueber die `default`-Dependency-Gruppe
-- `deno` als JavaScript-Runtime fuer yt-dlp-ejs
-- `AtomicParsley` fuer bestimmte Thumbnail-/Metadata-Faelle
-- `rtmpdump` fuer aeltere RTMP-Sonderfaelle
+- `ffmpeg` and `ffprobe` for merging, conversion, and post-processing
+- `yt-dlp-ejs` through the `default` dependency group
+- `deno` as the JavaScript runtime for yt-dlp-ejs
+- `AtomicParsley` for selected thumbnail and metadata cases
+- `rtmpdump` for older RTMP edge cases
 
-Das verbessert die Kompatibilitaet deutlich, garantiert aber nicht, dass jede Website jederzeit funktioniert. Manche Seiten erfordern Cookies, Login, PO-Token, regionale IPs oder kurzfristige yt-dlp-Fixes.
+This improves compatibility significantly, but it does not guarantee that every website works at all times. Some sites require cookies, login, PO tokens, regional IPs, or short-term yt-dlp fixes.
 
-### Manuell auf einem Rechner mit Docker
+### Manually on a Computer with Docker
 
 ```bash
-cd /pfad/zum/projekt
+cd /path/to/project
 docker build -t ghcr.io/maroishiku/ish-ytdlp:latest .
 docker login ghcr.io
 docker push ghcr.io/maroishiku/ish-ytdlp:latest
 ```
 
-Danach `docker-compose.zimaos-ui.yml` in ZimaOS importieren und `image:` auf genau diesen Namen setzen.
+Then import `docker-compose.zimaos-ui.yml` in ZimaOS and keep `image:` set to exactly that name.
 
-Wenn beim ersten Start noch kein Benutzer existiert und das Secret fehlt oder noch `change-me-before-first-start` enthaelt, beendet sich die App absichtlich mit einer Fehlermeldung.
+If no user exists on first start and the secret is missing or still set to `change-me-before-first-start`, the app exits intentionally with an error.
 
-## Lokale Entwicklung
+## Local Development
 
 ```bash
 python -m venv .venv
@@ -173,4 +174,4 @@ $env:FIRST_ADMIN_PASSWORD="dev-password-with-10-chars"
 .\.venv\Scripts\uvicorn app.main:app --reload --host 127.0.0.1 --port 8080
 ```
 
-Die WebUI liegt dann auf `http://127.0.0.1:8080`.
+The WebUI is then available at `http://127.0.0.1:8080`.

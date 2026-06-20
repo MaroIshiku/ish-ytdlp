@@ -10,6 +10,7 @@ import sqlite3
 import subprocess
 import threading
 import time
+import zipfile
 import importlib.metadata
 import importlib.util
 from datetime import datetime, timedelta, timezone
@@ -270,20 +271,23 @@ def normalize_download_options(payload: DownloadPayload) -> dict[str, str]:
     }
 
     media_type = settings["media_type"]
+    if media_type != "video":
+        settings["video_format"] = "auto"
+        settings["video_codec"] = "auto"
+        settings["video_quality"] = "auto"
+    if media_type != "audio":
+        settings["audio_format"] = "auto"
+        settings["audio_bitrate"] = "auto"
+    if media_type != "captions":
+        settings["caption_format"] = "auto"
+    if media_type != "thumbnail":
+        settings["thumbnail_format"] = "auto"
+
     if media_type == "video":
         video_format = settings["video_format"]
         video_codec = settings["video_codec"]
         if video_format != "auto" and video_codec != "auto" and video_codec not in VIDEO_FORMAT_CODECS[video_format]:
             raise HTTPException(status_code=400, detail=f"{video_codec} is not compatible with {video_format}")
-    elif media_type != "auto":
-        # Keep unrelated controls harmless when users switch the type in the UI.
-        if media_type != "audio":
-            settings["audio_format"] = "auto"
-            settings["audio_bitrate"] = "auto"
-        if media_type != "captions":
-            settings["caption_format"] = "auto"
-        if media_type != "thumbnail":
-            settings["thumbnail_format"] = "auto"
     return settings
 
 
@@ -304,7 +308,9 @@ def settings_summary(settings: dict[str, str]) -> str:
             settings.get("video_codec", "auto"),
             f"{settings.get('video_quality', 'auto')}p" if settings.get("video_quality") != "auto" else "auto",
         ]
-    return " ".join(part for part in parts if part and part != "auto")
+    summary = " ".join(part for part in parts if part and part != "auto")
+    media_label = media_type.title()
+    return f"{media_label} Auto" if summary == media_label else summary or f"{media_label} Auto"
 
 
 def legacy_settings(mode: str) -> dict[str, str]:
@@ -584,7 +590,7 @@ def run_download(row: sqlite3.Row) -> None:
                 if changes:
                     update_download(download_id, **changes)
             elif "[Metadata]" in clean and not title:
-                update_download(download_id, title="Metadata wird geschrieben")
+                update_download(download_id, title="Writing metadata")
 
         return_code = process.wait()
         with connect() as conn:
@@ -593,8 +599,9 @@ def run_download(row: sqlite3.Row) -> None:
             return
 
         if return_code == 0:
-            newest = newest_download_file(started_at)
-            final_file = postprocess_file(newest, settings)
+            files = output_files_since(started_at)
+            final_files = postprocess_files(files, settings)
+            final_file = package_download_files(download_id, final_files)
             relative_filename = final_file.relative_to(DOWNLOAD_DIR.resolve()).as_posix() if final_file else None
             file_size = final_file.stat().st_size if final_file and final_file.exists() else None
             update_download(
@@ -621,27 +628,54 @@ def run_download(row: sqlite3.Row) -> None:
             active_process = None
 
 
-def newest_download_file(since: float = 0) -> Path | None:
-    files = [
-        path
-        for path in DOWNLOAD_DIR.rglob("*")
-        if path.is_file() and not path.name.endswith(".part") and path.stat().st_mtime >= since
-    ]
-    if not files:
-        return None
-    return max(files, key=lambda path: path.stat().st_mtime)
+def download_files_since(since: float = 0) -> list[Path]:
+    return sorted(
+        [
+            path
+            for path in DOWNLOAD_DIR.rglob("*")
+            if path.is_file() and not path.name.endswith(".part") and path.stat().st_mtime >= since
+        ],
+        key=lambda path: path.stat().st_mtime,
+    )
 
 
-def output_path_for_conversion(source: Path, extension: str) -> Path:
-    target = source.with_suffix(f".{extension}")
-    if target == source:
-        target = source.with_name(f"{source.stem}.converted{source.suffix}")
+def unique_path(target: Path) -> Path:
     counter = 1
     unique = target
     while unique.exists():
         unique = target.with_name(f"{target.stem}-{counter}{target.suffix}")
         counter += 1
     return unique
+
+
+def output_path_for_conversion(source: Path, extension: str) -> Path:
+    target = source.with_suffix(f".{extension}")
+    if target == source:
+        target = source.with_name(f"{source.stem}.converted{source.suffix}")
+    return unique_path(target)
+
+
+def package_download_files(download_id: int, files: list[Path]) -> Path | None:
+    existing_files = [path for path in files if path.is_file()]
+    if not existing_files:
+        return None
+    if len(existing_files) == 1:
+        return existing_files[0]
+
+    target = unique_path(DOWNLOAD_DIR / f"download-{download_id}.zip")
+    download_root = DOWNLOAD_DIR.resolve()
+    with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path in existing_files:
+            archive.write(path, path.resolve().relative_to(download_root).as_posix())
+    return target
+
+
+def output_files_since(since: float = 0) -> list[Path]:
+    return [
+        path
+        for path in download_files_since(since)
+        if not path.name.startswith("download-") or path.suffix.lower() != ".zip"
+    ]
 
 
 def default_video_codec(settings: dict[str, str]) -> str:
@@ -726,6 +760,15 @@ def postprocess_file(path: Path | None, settings: dict[str, str]) -> Path | None
     if media_type == "captions" and settings.get("caption_format") == "txt":
         return caption_to_text(path)
     return path
+
+
+def postprocess_files(paths: list[Path], settings: dict[str, str]) -> list[Path]:
+    processed = []
+    for path in paths:
+        final_path = postprocess_file(path, settings)
+        if final_path:
+            processed.append(final_path)
+    return processed
 
 
 def package_version(name: str) -> str | None:

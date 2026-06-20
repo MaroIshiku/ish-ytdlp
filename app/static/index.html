@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -13,14 +13,14 @@
         <h1>YTDLP Client</h1>
         <form id="loginForm" class="stack">
           <label>
-            Benutzername
+            Username
             <input name="username" autocomplete="username" required />
           </label>
           <label>
-            Passwort
+            Password
             <input name="password" type="password" autocomplete="current-password" required />
           </label>
-          <button class="primary" type="submit">Anmelden</button>
+          <button class="primary" type="submit">Sign in</button>
           <p id="loginError" class="error" role="alert"></p>
         </form>
       </section>
@@ -34,20 +34,20 @@
         </div>
         <div class="session-box">
           <span id="currentUser"></span>
-          <button id="logoutButton" class="ghost" type="button">Abmelden</button>
+          <button id="logoutButton" class="ghost" type="button">Sign out</button>
         </div>
       </header>
 
       <section class="workspace">
         <aside class="panel submit-panel">
-          <h2>Neuer Download</h2>
+          <h2>New Download</h2>
           <form id="downloadForm" class="stack">
             <label>
               URL
               <input name="url" type="url" placeholder="https://..." required />
             </label>
             <label>
-              Typ
+              Type
               <select id="mediaType" name="media_type">
                 <option value="auto">Auto</option>
                 <option value="video">Video</option>
@@ -57,10 +57,10 @@
               </select>
             </label>
             <details class="settings-popover">
-              <summary>Optionen</summary>
+              <summary>Options</summary>
               <div class="settings-grid">
                 <label data-setting-group="video">
-                  Videoformat
+                  Video Format
                   <select name="video_format">
                     <option value="auto">Auto</option>
                     <option value="mp4">MP4</option>
@@ -69,7 +69,7 @@
                   </select>
                 </label>
                 <label data-setting-group="video">
-                  Videocodec
+                  Video Codec
                   <select name="video_codec">
                     <option value="auto">Auto</option>
                     <option value="h264">H.264</option>
@@ -79,7 +79,7 @@
                   </select>
                 </label>
                 <label data-setting-group="video">
-                  Aufloesung
+                  Resolution
                   <select name="video_quality">
                     <option value="auto">Auto</option>
                     <option value="2160">2160p</option>
@@ -91,7 +91,7 @@
                   </select>
                 </label>
                 <label data-setting-group="audio">
-                  Audioformat
+                  Audio Format
                   <select name="audio_format">
                     <option value="auto">Auto</option>
                     <option value="mp3">MP3</option>
@@ -113,7 +113,7 @@
                   </select>
                 </label>
                 <label data-setting-group="captions">
-                  Captionformat
+                  Caption Format
                   <select name="caption_format">
                     <option value="auto">Auto</option>
                     <option value="srt">SRT</option>
@@ -122,11 +122,11 @@
                   </select>
                 </label>
                 <label data-setting-group="captions">
-                  Sprachen
+                  Languages
                   <input name="caption_langs" value="de,en" placeholder="de,en" />
                 </label>
                 <label data-setting-group="thumbnail">
-                  Thumbnailformat
+                  Thumbnail Format
                   <select name="thumbnail_format">
                     <option value="auto">Auto</option>
                     <option value="jpg">JPG</option>
@@ -138,9 +138,9 @@
             </details>
             <label class="checkbox-row">
               <input name="playlist" type="checkbox" />
-              Playlist erlauben
+              Allow playlist
             </label>
-            <button class="primary" type="submit">Zur Queue</button>
+            <button class="primary" type="submit">Add to Queue</button>
             <p id="downloadError" class="error" role="alert"></p>
           </form>
         </aside>
@@ -148,21 +148,21 @@
         <section class="panel queue-panel">
           <div class="section-head">
             <h2>Queue</h2>
-            <button id="refreshButton" class="ghost" type="button">Aktualisieren</button>
+            <button id="refreshButton" class="ghost" type="button">Refresh</button>
           </div>
           <div id="downloadList" class="download-list"></div>
         </section>
 
         <section id="adminPanel" class="panel admin-panel" hidden>
-          <h2>Benutzer</h2>
+          <h2>Users</h2>
           <form id="userForm" class="stack compact-form">
-            <input name="username" placeholder="Benutzername" required minlength="3" />
-            <input name="password" type="password" placeholder="Passwort" required minlength="10" />
+            <input name="username" placeholder="Username" required minlength="3" />
+            <input name="password" type="password" placeholder="Password" required minlength="10" />
             <label class="checkbox-row">
               <input name="is_admin" type="checkbox" />
               Admin
             </label>
-            <button class="primary" type="submit">Erstellen</button>
+            <button class="primary" type="submit">Create</button>
             <p id="userError" class="error" role="alert"></p>
           </form>
           <div id="userList" class="user-list"></div>
@@ -171,9 +171,9 @@
     </main>
 
     <footer class="system-footer">
-      <span data-version>System wird geladen</span>
+      <span data-version>Loading system information</span>
     </footer>
 
-    <script src="/static/app.js?v=20260620-7"></script>
+    <script src="/static/app.js?v=20260620-8"></script>
   </body>
 </html>

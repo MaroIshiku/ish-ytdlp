@@ -24,7 +24,7 @@ async function loadVersion() {
     });
   } catch {
     targets.forEach((target) => {
-      target.textContent = "Version unbekannt";
+      target.textContent = "Version unknown";
     });
   }
 }
@@ -52,7 +52,7 @@ function formatBytes(bytes) {
 
 function formatDate(value) {
   if (!value) return "";
-  return new Intl.DateTimeFormat("de-DE", {
+  return new Intl.DateTimeFormat("en-US", {
     dateStyle: "short",
     timeStyle: "short",
   }).format(new Date(value));
@@ -62,35 +62,46 @@ function settingsLabel(settings = {}) {
   const type = settings.media_type || "auto";
   if (type === "auto") return "Auto";
   if (type === "audio") {
-    return ["Audio", settings.audio_format, settings.audio_bitrate]
+    const label = ["Audio", settings.audio_format, settings.audio_bitrate]
       .filter((value) => value && value !== "auto")
-      .join(" ") || "Audio Auto";
+      .join(" ");
+    return label === "Audio" ? "Audio Auto" : label || "Audio Auto";
   }
   if (type === "captions") {
-    return ["Captions", settings.caption_format, settings.caption_langs]
+    const label = ["Captions", settings.caption_format, settings.caption_langs]
       .filter((value) => value && value !== "auto")
-      .join(" ") || "Captions Auto";
+      .join(" ");
+    return label === "Captions" ? "Captions Auto" : label || "Captions Auto";
   }
   if (type === "thumbnail") {
-    return ["Thumbnail", settings.thumbnail_format]
+    const label = ["Thumbnail", settings.thumbnail_format]
       .filter((value) => value && value !== "auto")
-      .join(" ") || "Thumbnail Auto";
+      .join(" ");
+    return label === "Thumbnail" ? "Thumbnail Auto" : label || "Thumbnail Auto";
   }
-  return [
+  const label = [
     "Video",
     settings.video_format,
     settings.video_codec,
     settings.video_quality && settings.video_quality !== "auto" ? `${settings.video_quality}p` : null,
   ]
     .filter((value) => value && value !== "auto")
-    .join(" ") || "Video Auto";
+    .join(" ");
+  return label === "Video" ? "Video Auto" : label || "Video Auto";
 }
 
 function updateSettingVisibility() {
   const mediaType = $("#mediaType")?.value || "auto";
+  const settingsPopover = $(".settings-popover");
+  if (settingsPopover) {
+    settingsPopover.hidden = mediaType === "auto";
+    if (mediaType === "auto") {
+      settingsPopover.open = false;
+    }
+  }
   document.querySelectorAll("[data-setting-group]").forEach((element) => {
     const group = element.dataset.settingGroup;
-    element.hidden = mediaType !== group && mediaType !== "auto";
+    element.hidden = mediaType !== group;
   });
 }
 
@@ -112,7 +123,7 @@ async function api(path, options = {}) {
   }
 
   if (!response.ok) {
-    throw new Error(payload.detail || "Anfrage fehlgeschlagen");
+    throw new Error(payload.detail || "Request failed");
   }
   return payload;
 }
@@ -153,7 +164,7 @@ async function loadUsers() {
 function renderDownloads() {
   const target = $("#downloadList");
   if (!state.downloads.length) {
-    target.innerHTML = '<div class="empty-state">Keine Downloads</div>';
+    target.innerHTML = '<div class="empty-state">No downloads</div>';
     return;
   }
 
@@ -182,7 +193,7 @@ function renderDownloads() {
           <div class="card-actions">
             ${
               item.file_url
-                ? `<a class="icon-button" href="${escapeHtml(item.file_url)}" title="Datei herunterladen" aria-label="Datei herunterladen">
+                ? `<a class="icon-button" href="${escapeHtml(item.file_url)}" title="Download file" aria-label="Download file">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M12 3v11"></path>
                       <path d="m7 9 5 5 5-5"></path>
@@ -193,12 +204,12 @@ function renderDownloads() {
             }
             ${
               canCancel
-                ? `<button class="ghost danger" type="button" data-action="cancel" data-id="${item.id}">Stoppen</button>`
+                ? `<button class="ghost danger" type="button" data-action="cancel" data-id="${item.id}">Stop</button>`
                 : ""
             }
             ${
               canDelete
-                ? `<button class="ghost danger" type="button" data-action="delete" data-id="${item.id}">Entfernen</button>`
+                ? `<button class="ghost danger" type="button" data-action="delete" data-id="${item.id}">Remove</button>`
                 : ""
             }
           </div>
@@ -221,10 +232,10 @@ function renderUsers() {
             </div>
           </div>
           <div class="user-actions">
-            <button class="ghost" type="button" data-user-action="password" data-id="${user.id}">Passwort</button>
+            <button class="ghost" type="button" data-user-action="password" data-id="${user.id}">Password</button>
             ${
               user.id !== state.user.id
-                ? `<button class="ghost danger" type="button" data-user-action="delete" data-id="${user.id}">Loeschen</button>`
+                ? `<button class="ghost danger" type="button" data-user-action="delete" data-id="${user.id}">Delete</button>`
                 : ""
             }
           </div>
@@ -368,7 +379,7 @@ $("#userList").addEventListener("click", async (event) => {
     if (button.dataset.userAction === "delete") {
       await api(`/api/admin/users/${id}`, { method: "DELETE" });
     } else if (button.dataset.userAction === "password") {
-      const password = prompt("Neues Passwort");
+      const password = prompt("New password");
       if (!password) return;
       await api(`/api/admin/users/${id}/password`, {
         method: "PUT",
