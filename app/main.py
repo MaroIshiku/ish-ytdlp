@@ -14,7 +14,7 @@ import importlib.metadata
 import importlib.util
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlparse
 
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Request, Response
@@ -55,6 +55,15 @@ class DownloadPayload(BaseModel):
     url: str = Field(min_length=8, max_length=4096)
     mode: str = "best"
     playlist: bool = False
+    media_type: Literal["auto", "video", "audio", "captions", "thumbnail"] = "auto"
+    video_format: Literal["auto", "mp4", "webm", "mkv"] = "auto"
+    video_codec: Literal["auto", "h264", "h265", "av1", "vp9"] = "auto"
+    video_quality: Literal["auto", "2160", "1440", "1080", "720", "480", "360"] = "auto"
+    audio_format: Literal["auto", "mp3", "m4a", "opus", "flac", "wav"] = "auto"
+    audio_bitrate: Literal["auto", "320K", "256K", "192K", "128K", "96K"] = "auto"
+    caption_format: Literal["auto", "srt", "vtt", "txt"] = "auto"
+    caption_langs: str = Field(default="de,en", max_length=120)
+    thumbnail_format: Literal["auto", "jpg", "png", "webp"] = "auto"
 
 
 class UserCreatePayload(BaseModel):
@@ -77,6 +86,12 @@ def connect() -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
     return conn
+
+
+def ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def init_db() -> None:
@@ -109,6 +124,8 @@ def init_db() -> None:
               speed TEXT,
               eta TEXT,
               filename TEXT,
+              file_size INTEGER,
+              settings_json TEXT NOT NULL DEFAULT '{}',
               error TEXT,
               created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
               created_at TEXT NOT NULL,
@@ -116,6 +133,8 @@ def init_db() -> None:
             );
             """
         )
+        ensure_column(conn, "downloads", "file_size", "INTEGER")
+        ensure_column(conn, "downloads", "settings_json", "TEXT NOT NULL DEFAULT '{}'")
     ensure_initial_admin()
 
 
@@ -217,16 +236,186 @@ def validate_url(url: str) -> str:
     return url.strip()
 
 
-def download_mode_args(mode: str) -> list[str]:
-    modes = {
-        "best": ["-f", "bv*+ba/b"],
-        "mp4": ["-f", "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b", "--merge-output-format", "mp4"],
-        "audio_mp3": ["-f", "ba/b", "-x", "--audio-format", "mp3"],
-        "audio_m4a": ["-f", "ba[ext=m4a]/ba/b", "-x", "--audio-format", "m4a"],
+VIDEO_FORMAT_CODECS = {
+    "mp4": {"h264", "h265", "av1"},
+    "webm": {"vp9", "av1"},
+    "mkv": {"h264", "h265", "av1", "vp9"},
+}
+
+VIDEO_CODEC_FFMPEG = {
+    "h264": ["-c:v", "libx264", "-preset", "medium", "-crf", "23"],
+    "h265": ["-c:v", "libx265", "-preset", "medium", "-crf", "28"],
+    "av1": ["-c:v", "libaom-av1", "-crf", "30", "-b:v", "0"],
+    "vp9": ["-c:v", "libvpx-vp9", "-crf", "32", "-b:v", "0"],
+}
+
+
+def clean_caption_langs(value: str) -> str:
+    langs = [lang.strip() for lang in value.split(",") if lang.strip()]
+    valid = [lang for lang in langs if re.fullmatch(r"[A-Za-z0-9.*_-]{1,24}", lang)]
+    return ",".join(valid[:8]) or "de,en"
+
+
+def normalize_download_options(payload: DownloadPayload) -> dict[str, str]:
+    settings = {
+        "media_type": payload.media_type,
+        "video_format": payload.video_format,
+        "video_codec": payload.video_codec,
+        "video_quality": payload.video_quality,
+        "audio_format": payload.audio_format,
+        "audio_bitrate": payload.audio_bitrate,
+        "caption_format": payload.caption_format,
+        "caption_langs": clean_caption_langs(payload.caption_langs),
+        "thumbnail_format": payload.thumbnail_format,
     }
-    if mode not in modes:
-        raise HTTPException(status_code=400, detail="Unknown download mode")
-    return modes[mode]
+
+    media_type = settings["media_type"]
+    if media_type == "video":
+        video_format = settings["video_format"]
+        video_codec = settings["video_codec"]
+        if video_format != "auto" and video_codec != "auto" and video_codec not in VIDEO_FORMAT_CODECS[video_format]:
+            raise HTTPException(status_code=400, detail=f"{video_codec} is not compatible with {video_format}")
+    elif media_type != "auto":
+        # Keep unrelated controls harmless when users switch the type in the UI.
+        if media_type != "audio":
+            settings["audio_format"] = "auto"
+            settings["audio_bitrate"] = "auto"
+        if media_type != "captions":
+            settings["caption_format"] = "auto"
+        if media_type != "thumbnail":
+            settings["thumbnail_format"] = "auto"
+    return settings
+
+
+def settings_summary(settings: dict[str, str]) -> str:
+    media_type = settings.get("media_type", "auto")
+    if media_type == "auto":
+        return "Auto"
+    if media_type == "audio":
+        parts = ["Audio", settings.get("audio_format", "auto"), settings.get("audio_bitrate", "auto")]
+    elif media_type == "captions":
+        parts = ["Captions", settings.get("caption_format", "auto"), settings.get("caption_langs", "de,en")]
+    elif media_type == "thumbnail":
+        parts = ["Thumbnail", settings.get("thumbnail_format", "auto")]
+    else:
+        parts = [
+            "Video",
+            settings.get("video_format", "auto"),
+            settings.get("video_codec", "auto"),
+            f"{settings.get('video_quality', 'auto')}p" if settings.get("video_quality") != "auto" else "auto",
+        ]
+    return " ".join(part for part in parts if part and part != "auto")
+
+
+def legacy_settings(mode: str) -> dict[str, str]:
+    if mode == "mp4":
+        return {
+            "media_type": "video",
+            "video_format": "mp4",
+            "video_codec": "auto",
+            "video_quality": "auto",
+            "audio_format": "auto",
+            "audio_bitrate": "auto",
+            "caption_format": "auto",
+            "caption_langs": "de,en",
+            "thumbnail_format": "auto",
+        }
+    if mode == "audio_mp3":
+        return {
+            "media_type": "audio",
+            "video_format": "auto",
+            "video_codec": "auto",
+            "video_quality": "auto",
+            "audio_format": "mp3",
+            "audio_bitrate": "auto",
+            "caption_format": "auto",
+            "caption_langs": "de,en",
+            "thumbnail_format": "auto",
+        }
+    if mode == "audio_m4a":
+        return {
+            "media_type": "audio",
+            "video_format": "auto",
+            "video_codec": "auto",
+            "video_quality": "auto",
+            "audio_format": "m4a",
+            "audio_bitrate": "auto",
+            "caption_format": "auto",
+            "caption_langs": "de,en",
+            "thumbnail_format": "auto",
+        }
+    return {
+        "media_type": "auto",
+        "video_format": "auto",
+        "video_codec": "auto",
+        "video_quality": "auto",
+        "audio_format": "auto",
+        "audio_bitrate": "auto",
+        "caption_format": "auto",
+        "caption_langs": "de,en",
+        "thumbnail_format": "auto",
+    }
+
+
+def row_settings(row: sqlite3.Row) -> dict[str, str]:
+    try:
+        settings = json.loads(row["settings_json"] or "{}")
+    except (json.JSONDecodeError, KeyError):
+        settings = {}
+    return {**legacy_settings(row["mode"]), **settings}
+
+
+def format_selector_for_height(selector: str, quality: str) -> str:
+    if quality == "auto":
+        return selector
+    return selector.replace("bv*", f"bv*[height<={quality}]").replace("bestvideo", f"bestvideo[height<={quality}]")
+
+
+def ytdlp_args_for_settings(settings: dict[str, str]) -> list[str]:
+    media_type = settings.get("media_type", "auto")
+    if media_type == "auto":
+        return ["-f", "bv*+ba/b"]
+
+    if media_type == "audio":
+        audio_format = settings.get("audio_format", "auto")
+        args = ["-f", "ba/b", "-x"]
+        if audio_format != "auto":
+            args.extend(["--audio-format", audio_format])
+        if settings.get("audio_bitrate") != "auto":
+            args.extend(["--audio-quality", settings["audio_bitrate"]])
+        return args
+
+    if media_type == "captions":
+        caption_format = settings.get("caption_format", "auto")
+        convert_format = "vtt" if caption_format in {"auto", "txt"} else caption_format
+        return [
+            "--skip-download",
+            "--write-subs",
+            "--write-auto-subs",
+            "--sub-langs",
+            settings.get("caption_langs", "de,en"),
+            "--convert-subs",
+            convert_format,
+        ]
+
+    if media_type == "thumbnail":
+        args = ["--skip-download", "--write-thumbnail"]
+        if settings.get("thumbnail_format") != "auto":
+            args.extend(["--convert-thumbnails", settings["thumbnail_format"]])
+        return args
+
+    video_format = settings.get("video_format", "auto")
+    quality = settings.get("video_quality", "auto")
+    selector = "bv*+ba/b"
+    if video_format == "mp4":
+        selector = "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b"
+    elif video_format == "webm":
+        selector = "bv*[ext=webm]+ba[ext=webm]/b[ext=webm]/bv*+ba/b"
+    selector = format_selector_for_height(selector, quality)
+    args = ["-f", selector]
+    if video_format in {"mp4", "webm", "mkv"}:
+        args.extend(["--merge-output-format", video_format])
+    return args
 
 
 def parse_progress(line: str) -> tuple[float | None, str | None, str | None]:
@@ -239,12 +428,36 @@ def parse_progress(line: str) -> tuple[float | None, str | None, str | None]:
     return progress, speed, eta
 
 
+def safe_download_path(relative_path: str | None) -> Path | None:
+    if not relative_path:
+        return None
+    download_root = DOWNLOAD_DIR.resolve()
+    target = (download_root / relative_path).resolve()
+    try:
+        target.relative_to(download_root)
+    except ValueError:
+        return None
+    return target if target.is_file() else None
+
+
+def stored_file_size(row: sqlite3.Row) -> int | None:
+    try:
+        if row["file_size"] is not None:
+            return int(row["file_size"])
+    except (KeyError, TypeError, ValueError):
+        pass
+    target = safe_download_path(row["filename"])
+    return target.stat().st_size if target else None
+
+
 def row_to_download(row: sqlite3.Row) -> dict[str, Any]:
     file_url = f"/api/downloads/{row['id']}/file" if row["status"] == "completed" and row["filename"] else None
+    settings = row_settings(row)
     return {
         "id": row["id"],
         "url": row["url"],
         "mode": row["mode"],
+        "settings": settings,
         "playlist": bool(row["playlist"]),
         "title": row["title"],
         "status": row["status"],
@@ -252,6 +465,7 @@ def row_to_download(row: sqlite3.Row) -> dict[str, Any]:
         "speed": row["speed"],
         "eta": row["eta"],
         "filename": row["filename"],
+        "file_size": stored_file_size(row),
         "file_url": file_url,
         "error": row["error"],
         "created_by": row["created_by"],
@@ -314,7 +528,7 @@ def run_download(row: sqlite3.Row) -> None:
     download_id = row["id"]
     url = row["url"]
     playlist = bool(row["playlist"])
-    mode = row["mode"]
+    settings = row_settings(row)
     title = probe_title(url, playlist)
     if title:
         update_download(download_id, title=title)
@@ -324,15 +538,17 @@ def run_download(row: sqlite3.Row) -> None:
         "yt-dlp",
         "--newline",
         "--continue",
-        "--embed-metadata",
+        "--no-mtime",
         "-P",
         str(DOWNLOAD_DIR),
         "-o",
         "%(title).200B [%(id)s].%(ext)s",
     ]
+    if settings.get("media_type") in {"auto", "video", "audio"}:
+        command.append("--embed-metadata")
     if not playlist:
         command.append("--no-playlist")
-    command.extend(download_mode_args(mode))
+    command.extend(ytdlp_args_for_settings(settings))
     command.append(url)
 
     try:
@@ -378,7 +594,9 @@ def run_download(row: sqlite3.Row) -> None:
 
         if return_code == 0:
             newest = newest_download_file(started_at)
-            relative_filename = newest.relative_to(DOWNLOAD_DIR).as_posix() if newest else None
+            final_file = postprocess_file(newest, settings)
+            relative_filename = final_file.relative_to(DOWNLOAD_DIR.resolve()).as_posix() if final_file else None
+            file_size = final_file.stat().st_size if final_file and final_file.exists() else None
             update_download(
                 download_id,
                 status="completed",
@@ -386,6 +604,7 @@ def run_download(row: sqlite3.Row) -> None:
                 eta=None,
                 speed=None,
                 filename=relative_filename,
+                file_size=file_size,
                 error=None,
             )
         else:
@@ -411,6 +630,102 @@ def newest_download_file(since: float = 0) -> Path | None:
     if not files:
         return None
     return max(files, key=lambda path: path.stat().st_mtime)
+
+
+def output_path_for_conversion(source: Path, extension: str) -> Path:
+    target = source.with_suffix(f".{extension}")
+    if target == source:
+        target = source.with_name(f"{source.stem}.converted{source.suffix}")
+    counter = 1
+    unique = target
+    while unique.exists():
+        unique = target.with_name(f"{target.stem}-{counter}{target.suffix}")
+        counter += 1
+    return unique
+
+
+def default_video_codec(settings: dict[str, str]) -> str:
+    video_format = settings.get("video_format", "auto")
+    video_codec = settings.get("video_codec", "auto")
+    if video_codec != "auto":
+        return video_codec
+    if video_format == "webm":
+        return "vp9"
+    return "h264"
+
+
+def default_video_extension(settings: dict[str, str]) -> str:
+    video_format = settings.get("video_format", "auto")
+    if video_format != "auto":
+        return video_format
+    return "mp4"
+
+
+def should_convert_video(settings: dict[str, str]) -> bool:
+    return any(
+        settings.get(key, "auto") != "auto"
+        for key in ("video_format", "video_codec", "video_quality")
+    )
+
+
+def ffmpeg_audio_args_for_video(extension: str) -> list[str]:
+    if extension == "webm":
+        return ["-c:a", "libopus", "-b:a", "160k"]
+    return ["-c:a", "aac", "-b:a", "192k"]
+
+
+def convert_video(source: Path, settings: dict[str, str]) -> Path:
+    extension = default_video_extension(settings)
+    codec = default_video_codec(settings)
+    if extension in VIDEO_FORMAT_CODECS and codec not in VIDEO_FORMAT_CODECS[extension]:
+        raise RuntimeError(f"{codec} cannot be stored in {extension}")
+
+    target = output_path_for_conversion(source, extension)
+    command = ["ffmpeg", "-y", "-i", str(source)]
+    quality = settings.get("video_quality", "auto")
+    if quality != "auto":
+        command.extend(["-vf", f"scale=-2:min(ih\\,{quality})"])
+    command.extend(VIDEO_CODEC_FFMPEG[codec])
+    command.extend(ffmpeg_audio_args_for_video(extension))
+    if extension == "mp4":
+        command.extend(["-movflags", "+faststart"])
+    command.append(str(target))
+    result = subprocess.run(command, capture_output=True, text=True, timeout=None)
+    if result.returncode != 0:
+        target.unlink(missing_ok=True)
+        error = "\n".join((result.stderr or result.stdout or "").splitlines()[-8:])
+        raise RuntimeError(error or f"ffmpeg exited with code {result.returncode}")
+    source.unlink(missing_ok=True)
+    return target
+
+
+def caption_to_text(source: Path) -> Path:
+    target = output_path_for_conversion(source, "txt")
+    lines = []
+    timestamp = re.compile(r"^\d{1,2}:?\d{2}:\d{2}[.,]\d{3}\s+-->\s+")
+    for raw_line in source.read_text(encoding="utf-8", errors="ignore").splitlines():
+        line = raw_line.strip()
+        if not line or line.upper() == "WEBVTT" or line.isdigit() or timestamp.search(line):
+            continue
+        if line.startswith(("NOTE", "STYLE", "REGION")):
+            continue
+        clean = re.sub(r"<[^>]+>", "", line).strip()
+        if clean and (not lines or lines[-1] != clean):
+            lines.append(clean)
+    target.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+    source.unlink(missing_ok=True)
+    return target
+
+
+def postprocess_file(path: Path | None, settings: dict[str, str]) -> Path | None:
+    if not path:
+        return None
+    media_type = settings.get("media_type", "auto")
+    if media_type == "video" and should_convert_video(settings):
+        return convert_video(path, settings)
+    if media_type == "captions" and settings.get("caption_format") == "txt":
+        return caption_to_text(path)
+    return path
 
 
 def package_version(name: str) -> str | None:
@@ -537,16 +852,17 @@ def create_download(
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
     url = validate_url(payload.url)
-    download_mode_args(payload.mode)
+    settings = normalize_download_options(payload)
+    mode = settings_summary(settings)
     now = utc_now()
     with connect() as conn:
         cursor = conn.execute(
             """
             INSERT INTO downloads
-              (url, mode, playlist, status, created_by, created_at, updated_at)
-            VALUES (?, ?, ?, 'queued', ?, ?, ?)
+              (url, mode, playlist, status, settings_json, created_by, created_at, updated_at)
+            VALUES (?, ?, ?, 'queued', ?, ?, ?, ?)
             """,
-            (url, payload.mode, int(payload.playlist), user["id"], now, now),
+            (url, mode, int(payload.playlist), json.dumps(settings), user["id"], now, now),
         )
         row = conn.execute("SELECT * FROM downloads WHERE id = ?", (cursor.lastrowid,)).fetchone()
     return {"download": row_to_download(row)}

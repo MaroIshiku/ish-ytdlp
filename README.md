@@ -12,10 +12,14 @@ Diese App wurde von KI erstellt. Feature-Requests werden mit hoher Wahrscheinlic
 - erster Benutzer wird beim ersten Start als Admin aus einem Docker-Secret erstellt
 - Admins koennen weitere Benutzer erstellen, Passwoerter setzen und Benutzer loeschen
 - Download-Queue fuer Video, MP4, MP3 und M4A
+- Download-Optionen fuer Auto, Video, Audio, Captions und Thumbnails
+- Video-Optionen fuer Container, Codec und maximale Aufloesung
+- Audio-Optionen fuer Format und Bitrate
+- Caption-Optionen fuer Sprache und Ausgabeformat
 - optionaler Playlist-Download
 - Live-Status mit Fortschritt, Geschwindigkeit und ETA
 - benutzergetrennte Download-Historie: Benutzer sehen nur ihre eigenen Queue-Eintraege
-- Download-Button direkt an abgeschlossenen Queue-Eintraegen
+- Dateigroesse und Download-Button direkt an abgeschlossenen Queue-Eintraegen
 - System-Footer mit App-Version, Build-Commit, Build-Datum und yt-dlp-Version
 - persistente SQLite-Datenbank in `data/` innerhalb von `/media/ZimaOS-HD/AppData/ish_ytdlp`
 - Downloads in `downloads/` innerhalb von `/media/ZimaOS-HD/AppData/ish_ytdlp`
@@ -137,7 +141,7 @@ Falls das GHCR-Package privat ist, kann ZimaOS es nicht ohne Registry-Login zieh
 
 Das Docker-Image installiert `yt-dlp[default,curl-cffi]`. Dadurch sind die von yt-dlp empfohlenen Standard-Abhaengigkeiten sowie `curl_cffi` fuer Browser-Impersonation enthalten. Das hilft bei Seiten, die TLS-Fingerprinting einsetzen und sonst Meldungen wie `The extractor is attempting impersonation, but no impersonate target is available` ausgeben.
 
-Zusätzlich enthaelt das Image:
+Zusaetzlich enthaelt das Image:
 
 - `ffmpeg` und `ffprobe` fuer Merging und Post-Processing
 - `yt-dlp-ejs` ueber die `default`-Dependency-Gruppe

@@ -79,6 +79,10 @@ select {
   outline: none;
 }
 
+summary {
+  cursor: pointer;
+}
+
 input:focus,
 select:focus {
   border-color: var(--accent);
@@ -197,6 +201,40 @@ h2 {
   gap: 18px;
 }
 
+.settings-popover {
+  position: relative;
+}
+
+.settings-popover summary {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: var(--text);
+  list-style: none;
+}
+
+.settings-popover summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-popover summary::after {
+  content: "Filter";
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.settings-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
 .section-head {
   display: flex;
   align-items: center;
@@ -275,6 +313,10 @@ h2 {
   color: var(--muted);
   font-size: 0.86rem;
   overflow-wrap: anywhere;
+}
+
+.download-card .meta:first-of-type {
+  line-height: 1.35;
 }
 
 .badge {
@@ -402,6 +444,20 @@ h2 {
   .admin-panel {
     max-height: 100%;
     overflow: auto;
+  }
+
+  .settings-popover[open] .settings-grid {
+    position: absolute;
+    z-index: 10;
+    right: 0;
+    left: 0;
+    max-height: min(520px, calc(100vh - 300px));
+    overflow: auto;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(25, 29, 34, 0.98);
+    box-shadow: var(--shadow);
   }
 }
 

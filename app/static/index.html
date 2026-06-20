@@ -47,14 +47,95 @@
               <input name="url" type="url" placeholder="https://..." required />
             </label>
             <label>
-              Format
-              <select name="mode">
-                <option value="best">Bestes Video</option>
-                <option value="mp4">MP4 Video</option>
-                <option value="audio_mp3">MP3 Audio</option>
-                <option value="audio_m4a">M4A Audio</option>
+              Typ
+              <select id="mediaType" name="media_type">
+                <option value="auto">Auto</option>
+                <option value="video">Video</option>
+                <option value="audio">Audio</option>
+                <option value="captions">Captions</option>
+                <option value="thumbnail">Thumbnail</option>
               </select>
             </label>
+            <details class="settings-popover">
+              <summary>Optionen</summary>
+              <div class="settings-grid">
+                <label data-setting-group="video">
+                  Videoformat
+                  <select name="video_format">
+                    <option value="auto">Auto</option>
+                    <option value="mp4">MP4</option>
+                    <option value="webm">WebM</option>
+                    <option value="mkv">MKV</option>
+                  </select>
+                </label>
+                <label data-setting-group="video">
+                  Videocodec
+                  <select name="video_codec">
+                    <option value="auto">Auto</option>
+                    <option value="h264">H.264</option>
+                    <option value="h265">H.265</option>
+                    <option value="av1">AV1</option>
+                    <option value="vp9">VP9</option>
+                  </select>
+                </label>
+                <label data-setting-group="video">
+                  Aufloesung
+                  <select name="video_quality">
+                    <option value="auto">Auto</option>
+                    <option value="2160">2160p</option>
+                    <option value="1440">1440p</option>
+                    <option value="1080">1080p</option>
+                    <option value="720">720p</option>
+                    <option value="480">480p</option>
+                    <option value="360">360p</option>
+                  </select>
+                </label>
+                <label data-setting-group="audio">
+                  Audioformat
+                  <select name="audio_format">
+                    <option value="auto">Auto</option>
+                    <option value="mp3">MP3</option>
+                    <option value="m4a">M4A</option>
+                    <option value="opus">Opus</option>
+                    <option value="flac">FLAC</option>
+                    <option value="wav">WAV</option>
+                  </select>
+                </label>
+                <label data-setting-group="audio">
+                  Bitrate
+                  <select name="audio_bitrate">
+                    <option value="auto">Auto</option>
+                    <option value="320K">320K</option>
+                    <option value="256K">256K</option>
+                    <option value="192K">192K</option>
+                    <option value="128K">128K</option>
+                    <option value="96K">96K</option>
+                  </select>
+                </label>
+                <label data-setting-group="captions">
+                  Captionformat
+                  <select name="caption_format">
+                    <option value="auto">Auto</option>
+                    <option value="srt">SRT</option>
+                    <option value="vtt">VTT</option>
+                    <option value="txt">TXT</option>
+                  </select>
+                </label>
+                <label data-setting-group="captions">
+                  Sprachen
+                  <input name="caption_langs" value="de,en" placeholder="de,en" />
+                </label>
+                <label data-setting-group="thumbnail">
+                  Thumbnailformat
+                  <select name="thumbnail_format">
+                    <option value="auto">Auto</option>
+                    <option value="jpg">JPG</option>
+                    <option value="png">PNG</option>
+                    <option value="webp">WebP</option>
+                  </select>
+                </label>
+              </div>
+            </details>
             <label class="checkbox-row">
               <input name="playlist" type="checkbox" />
               Playlist erlauben
@@ -93,6 +174,6 @@
       <span data-version>System wird geladen</span>
     </footer>
 
-    <script src="/static/app.js?v=20260620-6"></script>
+    <script src="/static/app.js?v=20260620-7"></script>
   </body>
 </html>

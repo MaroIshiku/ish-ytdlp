@@ -38,12 +38,60 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function formatBytes(bytes) {
+  if (!bytes) return "";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let size = Number(bytes);
+  let index = 0;
+  while (size >= 1024 && index < units.length - 1) {
+    size /= 1024;
+    index += 1;
+  }
+  return `${size.toFixed(index ? 1 : 0)} ${units[index]}`;
+}
+
 function formatDate(value) {
   if (!value) return "";
   return new Intl.DateTimeFormat("de-DE", {
     dateStyle: "short",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function settingsLabel(settings = {}) {
+  const type = settings.media_type || "auto";
+  if (type === "auto") return "Auto";
+  if (type === "audio") {
+    return ["Audio", settings.audio_format, settings.audio_bitrate]
+      .filter((value) => value && value !== "auto")
+      .join(" ") || "Audio Auto";
+  }
+  if (type === "captions") {
+    return ["Captions", settings.caption_format, settings.caption_langs]
+      .filter((value) => value && value !== "auto")
+      .join(" ") || "Captions Auto";
+  }
+  if (type === "thumbnail") {
+    return ["Thumbnail", settings.thumbnail_format]
+      .filter((value) => value && value !== "auto")
+      .join(" ") || "Thumbnail Auto";
+  }
+  return [
+    "Video",
+    settings.video_format,
+    settings.video_codec,
+    settings.video_quality && settings.video_quality !== "auto" ? `${settings.video_quality}p` : null,
+  ]
+    .filter((value) => value && value !== "auto")
+    .join(" ") || "Video Auto";
+}
+
+function updateSettingVisibility() {
+  const mediaType = $("#mediaType")?.value || "auto";
+  document.querySelectorAll("[data-setting-group]").forEach((element) => {
+    const group = element.dataset.settingGroup;
+    element.hidden = mediaType !== group && mediaType !== "auto";
+  });
 }
 
 async function api(path, options = {}) {
@@ -80,7 +128,7 @@ function showApp() {
   $("#appView").hidden = false;
   $(".workspace")?.classList.toggle("has-admin", Boolean(state.user?.is_admin));
   $("#currentUser").textContent = state.user?.is_admin
-    ? `${state.user.username} · Admin`
+    ? `${state.user.username} - Admin`
     : state.user?.username;
   $("#adminPanel").hidden = !state.user?.is_admin;
 }
@@ -115,9 +163,10 @@ function renderDownloads() {
       const canCancel = ["queued", "running"].includes(item.status);
       const canDelete = item.status !== "running";
       const progress = Math.max(0, Math.min(100, item.progress || 0));
-      const detail = [item.mode, item.speed, item.eta ? `ETA ${item.eta}` : null]
+      const size = formatBytes(item.file_size);
+      const detail = [settingsLabel(item.settings), size, item.speed, item.eta ? `ETA ${item.eta}` : null]
         .filter(Boolean)
-        .join(" · ");
+        .join(" - ");
       return `
         <article class="download-card">
           <div class="download-top">
@@ -128,7 +177,7 @@ function renderDownloads() {
             <span class="badge ${escapeHtml(item.status)}">${escapeHtml(item.status)}</span>
           </div>
           <div class="progress-track"><div class="progress-bar" style="width: ${progress}%"></div></div>
-          <div class="meta">${progress.toFixed(0)}% · ${escapeHtml(formatDate(item.created_at))}</div>
+          <div class="meta">${progress.toFixed(0)}% - ${escapeHtml(formatDate(item.created_at))}</div>
           ${item.error ? `<div class="meta">${escapeHtml(item.error)}</div>` : ""}
           <div class="card-actions">
             ${
@@ -168,7 +217,7 @@ function renderUsers() {
           <div class="row-top">
             <div>
               <div class="user-name">${escapeHtml(user.username)}</div>
-              <div class="meta">${user.is_admin ? "Admin" : "User"} · ${escapeHtml(formatDate(user.created_at))}</div>
+              <div class="meta">${user.is_admin ? "Admin" : "User"} - ${escapeHtml(formatDate(user.created_at))}</div>
             </div>
           </div>
           <div class="user-actions">
@@ -237,11 +286,20 @@ $("#downloadForm").addEventListener("submit", async (event) => {
       method: "POST",
       body: JSON.stringify({
         url: form.get("url"),
-        mode: form.get("mode"),
+        media_type: form.get("media_type"),
+        video_format: form.get("video_format"),
+        video_codec: form.get("video_codec"),
+        video_quality: form.get("video_quality"),
+        audio_format: form.get("audio_format"),
+        audio_bitrate: form.get("audio_bitrate"),
+        caption_format: form.get("caption_format"),
+        caption_langs: form.get("caption_langs"),
+        thumbnail_format: form.get("thumbnail_format"),
         playlist: form.get("playlist") === "on",
       }),
     });
     downloadForm?.reset();
+    updateSettingVisibility();
     await loadDownloads();
   } catch (error) {
     $("#downloadError").textContent = error.message;
@@ -268,6 +326,17 @@ $("#downloadList").addEventListener("click", async (event) => {
 });
 
 $("#refreshButton").addEventListener("click", loadDownloads);
+$("#mediaType").addEventListener("change", updateSettingVisibility);
+
+const settingsPopover = $(".settings-popover");
+if (settingsPopover && window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+  settingsPopover.addEventListener("mouseenter", () => {
+    settingsPopover.open = true;
+  });
+  settingsPopover.addEventListener("mouseleave", () => {
+    settingsPopover.open = false;
+  });
+}
 
 $("#userForm").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -314,4 +383,5 @@ $("#userList").addEventListener("click", async (event) => {
   }
 });
 
+updateSettingVisibility();
 boot();
