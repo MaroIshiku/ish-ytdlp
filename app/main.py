@@ -49,10 +49,20 @@ LOGIN_MAX_FAILURES = int(os.getenv("APP_LOGIN_MAX_FAILURES", "5"))
 SETUP_WINDOW_SECONDS = int(os.getenv("APP_SETUP_RATE_WINDOW_SECONDS", "900"))
 SETUP_MAX_FAILURES = int(os.getenv("APP_SETUP_MAX_FAILURES", "8"))
 MIN_PASSWORD_LENGTH = max(12, int(os.getenv("APP_MIN_PASSWORD_LENGTH", "12")))
-APP_VERSION = os.getenv("APP_VERSION", "0.1.0")
+APP_VERSION = os.getenv("APP_VERSION", "0.1.1")
 APP_BUILD_SHA = os.getenv("APP_BUILD_SHA", "dev")
 APP_BUILD_DATE = os.getenv("APP_BUILD_DATE", "unknown")
 LOG_LEVEL = os.getenv("ISHIKU_LOG_LEVEL", "info")
+FILE_RETENTION_DAYS = max(0, int(os.getenv("PULLIKU_FILE_RETENTION_DAYS", "7")))
+CLEANUP_INTERVAL_SECONDS = max(60, int(os.getenv("PULLIKU_CLEANUP_INTERVAL_SECONDS", "3600")))
+APP_PUBLIC_URL = os.getenv("ISHIKU_APP_URL", "").strip().rstrip("/")
+ALLOWED_ORIGIN_VALUES = {
+    origin.strip().rstrip("/")
+    for origin in os.getenv("ISHIKU_ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+}
+if APP_PUBLIC_URL:
+    ALLOWED_ORIGIN_VALUES.add(APP_PUBLIC_URL)
 SETUP_SECRET_FILE_ENV = "ISHIKU_SETUP_SECRET_FILE"
 SETUP_SECRET_ENV = "ISHIKU_SETUP_SECRET"
 DEFAULT_SETUP_SECRET_FILE = "/run/secrets/ishiku_setup_secret"
@@ -103,6 +113,10 @@ class UserCreatePayload(BaseModel):
 
 class PasswordPayload(BaseModel):
     password: str = Field(min_length=12, max_length=4096)
+
+
+class PermanentPayload(BaseModel):
+    is_permanent: bool
 
 
 class SetupRegisterPayload(BaseModel):
@@ -166,6 +180,7 @@ def init_db() -> None:
               eta TEXT,
               filename TEXT,
               file_size INTEGER,
+              is_permanent INTEGER NOT NULL DEFAULT 0,
               settings_json TEXT NOT NULL DEFAULT '{}',
               error TEXT,
               created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -184,6 +199,7 @@ def init_db() -> None:
         ensure_column(conn, "users", "email", "TEXT")
         ensure_column(conn, "sessions", "csrf_token_hash", "TEXT")
         ensure_column(conn, "downloads", "file_size", "INTEGER")
+        ensure_column(conn, "downloads", "is_permanent", "INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "downloads", "settings_json", "TEXT NOT NULL DEFAULT '{}'")
         admin_count = conn.execute("SELECT COUNT(*) FROM users WHERE is_admin = 1").fetchone()[0]
         setup_completed = conn.execute("SELECT value FROM setup_state WHERE key = 'setup_completed'").fetchone()
@@ -216,12 +232,11 @@ def read_setup_secret() -> tuple[str | None, str | None]:
             return None, SETUP_SECRET_FILE_ENV
         return (value, None) if value else (None, SETUP_SECRET_FILE_ENV)
 
-    if file_was_explicit:
-        return None, SETUP_SECRET_FILE_ENV
-
     fallback = os.getenv(SETUP_SECRET_ENV)
     if fallback and fallback.strip():
         return fallback.strip(), None
+    if file_was_explicit:
+        return None, SETUP_SECRET_FILE_ENV
     return None, SETUP_SECRET_ENV
 
 
@@ -721,6 +736,28 @@ def safe_download_path(relative_path: str | None) -> Path | None:
     return target if target.is_file() else None
 
 
+def download_path_candidate(relative_path: str | None) -> Path | None:
+    if not relative_path:
+        return None
+    download_root = DOWNLOAD_DIR.resolve()
+    target = (download_root / relative_path).resolve()
+    try:
+        target.relative_to(download_root)
+    except ValueError:
+        return None
+    return target
+
+
+def delete_download_file(relative_path: str | None) -> bool:
+    target = download_path_candidate(relative_path)
+    if not target or not target.exists():
+        return False
+    if not target.is_file():
+        raise OSError("Download path is not a file")
+    target.unlink()
+    return True
+
+
 def stored_file_size(row: sqlite3.Row) -> int | None:
     try:
         if row["file_size"] is not None:
@@ -748,6 +785,8 @@ def row_to_download(row: sqlite3.Row) -> dict[str, Any]:
         "filename": row["filename"],
         "file_size": stored_file_size(row),
         "file_url": file_url,
+        "is_permanent": bool(row["is_permanent"]),
+        "retention_days": FILE_RETENTION_DAYS,
         "error": row["error"],
         "created_by": row["created_by"],
         "created_at": row["created_at"],
@@ -1097,6 +1136,7 @@ def system_info() -> dict[str, Any]:
         "app_id": APP_ID,
         "data_dir": str(DATA_DIR),
         "download_dir": str(DOWNLOAD_DIR),
+        "file_retention_days": FILE_RETENTION_DAYS,
         "database_status": db_status,
         "setup_state": "completed" if setup["setup_completed"] else ("ready" if setup["setup_configured"] else "unconfigured"),
         "log_level": LOG_LEVEL,
@@ -1111,8 +1151,43 @@ def system_info() -> dict[str, Any]:
     }
 
 
+def cleanup_expired_downloads() -> int:
+    if FILE_RETENTION_DAYS <= 0:
+        return 0
+
+    threshold = datetime.now(timezone.utc) - timedelta(days=FILE_RETENTION_DAYS)
+    deleted = 0
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, filename
+            FROM downloads
+            WHERE status = 'completed'
+              AND COALESCE(is_permanent, 0) = 0
+              AND filename IS NOT NULL
+              AND updated_at < ?
+            """,
+            (threshold.isoformat(),),
+        ).fetchall()
+
+        for row in rows:
+            try:
+                delete_download_file(row["filename"])
+            except OSError:
+                continue
+            conn.execute("DELETE FROM downloads WHERE id = ?", (row["id"],))
+            deleted += 1
+    return deleted
+
+
 def worker_loop() -> None:
+    last_cleanup = 0.0
     while not stop_worker.is_set():
+        now = time.time()
+        if now - last_cleanup >= CLEANUP_INTERVAL_SECONDS:
+            cleanup_expired_downloads()
+            last_cleanup = now
+
         row = claim_next_download()
         if row:
             run_download(row)
@@ -1359,6 +1434,28 @@ def cancel_download(
     return {"status": "cancelled"}
 
 
+@app.post("/api/downloads/{download_id}/permanent")
+def set_download_permanent(
+    download_id: int,
+    payload: PermanentPayload,
+    _csrf: None = Depends(require_csrf),
+    user: dict[str, Any] = Depends(get_current_user),
+) -> dict[str, Any]:
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM downloads WHERE id = ? AND created_by = ?",
+            (download_id, user["id"]),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Download not found")
+        conn.execute(
+            "UPDATE downloads SET is_permanent = ?, updated_at = ? WHERE id = ?",
+            (int(payload.is_permanent), utc_now(), download_id),
+        )
+        updated = conn.execute("SELECT * FROM downloads WHERE id = ?", (download_id,)).fetchone()
+    return {"download": row_to_download(updated)}
+
+
 @app.delete("/api/downloads/{download_id}")
 def delete_download(
     download_id: int,
@@ -1367,13 +1464,18 @@ def delete_download(
 ) -> dict[str, str]:
     with connect() as conn:
         row = conn.execute(
-            "SELECT status FROM downloads WHERE id = ? AND created_by = ?",
+            "SELECT status, filename FROM downloads WHERE id = ? AND created_by = ?",
             (download_id, user["id"]),
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Download not found")
         if row["status"] == "running":
             raise HTTPException(status_code=409, detail="Cancel running downloads before deleting them")
+        if row["filename"]:
+            try:
+                delete_download_file(row["filename"])
+            except OSError as exc:
+                raise HTTPException(status_code=500, detail="Could not delete local file") from exc
         conn.execute("DELETE FROM downloads WHERE id = ?", (download_id,))
     return {"status": "deleted"}
 
@@ -1506,24 +1608,54 @@ def delete_user(
     return {"status": "deleted"}
 
 
-def same_origin(request: Request, value: str | None) -> bool:
-    if not value:
-        return True
-    parsed = urlparse(value)
-    request_url = request.url
-    return (
-        parsed.scheme == request_url.scheme
-        and parsed.hostname == request_url.hostname
-        and (parsed.port or default_port(parsed.scheme)) == (request_url.port or default_port(request_url.scheme))
-    )
-
-
 def default_port(scheme: str) -> int | None:
     if scheme == "http":
         return 80
     if scheme == "https":
         return 443
     return None
+
+
+def forwarded_header_value(value: str | None) -> str | None:
+    if not value:
+        return None
+    return value.split(",", 1)[0].strip()
+
+
+def normalized_origin(value: str | None) -> str | None:
+    if not value:
+        return None
+    parsed = urlparse(value)
+    if not parsed.scheme or not parsed.hostname:
+        return None
+    port = parsed.port
+    netloc = parsed.hostname
+    if port and port != default_port(parsed.scheme):
+        netloc = f"{netloc}:{port}"
+    return f"{parsed.scheme}://{netloc}"
+
+
+def request_origin(request: Request) -> str:
+    scheme = (
+        forwarded_header_value(request.headers.get("x-forwarded-proto"))
+        or request.url.scheme
+    ).lower()
+    host = (
+        forwarded_header_value(request.headers.get("x-forwarded-host"))
+        or request.headers.get("host")
+        or request.url.netloc
+    )
+    return f"{scheme}://{host}".rstrip("/")
+
+
+def same_origin(request: Request, value: str | None) -> bool:
+    if not value:
+        return True
+    candidate = normalized_origin(value)
+    if not candidate:
+        return False
+    allowed_origins = {origin for origin in (normalized_origin(origin) for origin in ALLOWED_ORIGIN_VALUES) if origin}
+    return candidate == normalized_origin(request_origin(request)) or candidate in allowed_origins
 
 
 @app.middleware("http")
@@ -1544,7 +1676,7 @@ async def security_headers(request: Request, call_next: Any) -> Response:
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "script-src 'self'; "
-        "style-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data:; "
         "font-src 'self'; "
         "connect-src 'self'; "

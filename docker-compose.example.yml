@@ -9,24 +9,22 @@ services:
     environment:
       TZ: Europe/Berlin
       ISHIKU_APP_URL: http://localhost:8180
+      ISHIKU_ALLOWED_ORIGINS: ""
       ISHIKU_BASE_PATH: /
       ISHIKU_DATA_DIR: /data
       DOWNLOAD_DIR: /downloads
-      ISHIKU_SETUP_SECRET_FILE: /run/secrets/ishiku_setup_secret
+      ISHIKU_SETUP_SECRET_FILE: ""
+      ISHIKU_SETUP_SECRET: "replace-with-a-long-random-setup-secret"
       ISHIKU_LOG_LEVEL: info
+      PULLIKU_FILE_RETENTION_DAYS: 7
+      PULLIKU_CLEANUP_INTERVAL_SECONDS: 3600
       SESSION_DAYS: 14
     volumes:
       - ./data:/data
       - ./downloads:/downloads
-    secrets:
-      - ishiku_setup_secret
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
       interval: 30s
       timeout: 5s
       retries: 5
       start_period: 20s
-
-secrets:
-  ishiku_setup_secret:
-    file: ./secrets/setup_secret.txt

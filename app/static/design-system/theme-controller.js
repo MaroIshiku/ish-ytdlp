@@ -59,7 +59,6 @@ export function applyThemeState({ appId, theme = DEFAULT_THEME, mode = DEFAULT_M
   root.dataset.theme = normalizedTheme;
   root.dataset.mode = normalizedMode;
   root.dataset.resolvedMode = resolvedMode;
-  root.style.colorScheme = resolvedMode;
 
   if (persist) {
     const { themeKey, modeKey } = getThemeKeys(appId);

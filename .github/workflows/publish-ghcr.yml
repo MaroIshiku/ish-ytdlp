@@ -58,7 +58,7 @@ jobs:
         with:
           context: .
           build-args: |
-            APP_VERSION=0.1.0
+            APP_VERSION=0.1.1
             APP_BUILD_SHA=${{ github.sha }}
             APP_BUILD_DATE=${{ steps.build_date.outputs.value }}
           push: true

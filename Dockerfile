@@ -2,7 +2,7 @@ FROM denoland/deno:bin-2.8.3 AS deno
 
 FROM python:3.12-slim
 
-ARG APP_VERSION=0.1.0
+ARG APP_VERSION=0.1.1
 ARG APP_BUILD_SHA=dev
 ARG APP_BUILD_DATE=unknown
 

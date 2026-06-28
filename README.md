@@ -54,14 +54,12 @@ Lege die App-Daten auf ZimaOS oder deinem Docker-Host an:
 ```bash
 mkdir -p /media/ZimaOS-HD/AppData/pulliku/data
 mkdir -p /media/ZimaOS-HD/AppData/pulliku/downloads
-mkdir -p /media/ZimaOS-HD/AppData/pulliku/secrets
 ```
 
-Erzeuge ein langes Setup-Secret:
+Trage in `docker-compose.yml` ein langes Setup-Secret ein:
 
-```bash
-openssl rand -base64 48 > /media/ZimaOS-HD/AppData/pulliku/secrets/setup_secret.txt
-chmod 600 /media/ZimaOS-HD/AppData/pulliku/secrets/setup_secret.txt
+```yaml
+ISHIKU_SETUP_SECRET: "ersetze-das-durch-ein-langes-zufaelliges-secret"
 ```
 
 Starte Pulliku:
@@ -85,7 +83,7 @@ Beim ersten Oeffnen zeigt Pulliku automatisch das Registrierungsfenster fuer den
 
 Im Registrierungsfenster werden benoetigt:
 
-- Setup-Secret aus `secrets/setup_secret.txt`
+- Setup-Secret aus `ISHIKU_SETUP_SECRET` oder aus der Secret-Datei
 - Anzeigename
 - Admin-Benutzername
 - optional E-Mail
@@ -101,18 +99,23 @@ Das Admin-Passwort darf nicht mit dem Setup-Secret, dem Usernamen oder dem App-N
 | --- | --- | --- |
 | `TZ` | Zeitzone fuer Logs und Anzeige | `Europe/Berlin` |
 | `ISHIKU_APP_URL` | Oeffentliche URL der App hinter einem Reverse Proxy | leer |
+| `ISHIKU_ALLOWED_ORIGINS` | Optionale kommaseparierte Zusatz-Origins fuer HTTPS/Reverse-Proxy-Deployments | leer |
 | `ISHIKU_BASE_PATH` | Basis-Pfad hinter Reverse Proxy | `/` |
 | `ISHIKU_DATA_DIR` | Persistenter Datenpfad im Container | `/data` |
 | `DOWNLOAD_DIR` | Download-Zielpfad im Container | `/downloads` |
 | `ISHIKU_LOG_LEVEL` | Log-Level | `info` |
 | `ISHIKU_SETUP_SECRET_FILE` | Pfad zum Docker-Secret | `/run/secrets/ishiku_setup_secret` |
 | `ISHIKU_SETUP_SECRET` | Fallback-Secret als ENV, nur wenn kein Secret-File genutzt wird | leer |
+| `PULLIKU_FILE_RETENTION_DAYS` | Automatische Loeschfrist fuer abgeschlossene Dateien, ausser sie sind permanent markiert. `0` deaktiviert die Frist. | `7` |
+| `PULLIKU_CLEANUP_INTERVAL_SECONDS` | Intervall fuer den automatischen Cleanup-Job | `3600` |
 | `APP_COOKIE_SECURE` | Secure Cookies und HSTS fuer HTTPS | `false` |
 | `SESSION_DAYS` | Session-Laufzeit in Tagen | `14` |
 
 ### Docker Secrets
 
-Bevorzugt wird ein Docker/Compose Secret als Datei. In `docker-compose.yml` wird dieses Secret nach `/run/secrets/ishiku_setup_secret` gemountet.
+Fuer einfache private Deployments kann `ISHIKU_SETUP_SECRET` direkt als Klartext in der Compose-Umgebung gesetzt werden.
+
+Sicherer ist ein Docker/Compose Secret als Datei ueber `ISHIKU_SETUP_SECRET_FILE`, weil ENV-Werte je nach Host leichter auslesbar sind.
 
 Fuer ZimaOS/CasaOS gibt es zusaetzlich `docker-compose.zimaos-ui.yml`, das die Secret-Datei direkt bind-mounted.
 

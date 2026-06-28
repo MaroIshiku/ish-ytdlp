@@ -71,7 +71,6 @@ function applyTheme() {
   document.documentElement.dataset.theme = theme;
   document.documentElement.dataset.mode = mode;
   document.documentElement.dataset.resolvedMode = resolved;
-  document.documentElement.style.colorScheme = resolved;
   updateThemeControls(theme, mode);
   requestAnimationFrame(() => {
     const color = getComputedStyle(document.documentElement).getPropertyValue("--color-background").trim();
@@ -97,8 +96,10 @@ async function injectIcons() {
   try {
     const response = await fetch("/static/icons/psu-icons.svg", { credentials: "same-origin" });
     target.innerHTML = await response.text();
+    target.hidden = true;
   } catch {
     target.innerHTML = "";
+    target.hidden = true;
   }
 }
 
@@ -194,6 +195,15 @@ function settingsLabel(settings = {}) {
     .filter((value) => value && value !== "auto")
     .join(" ");
   return label === "Video" ? "Video Auto" : label || "Video Auto";
+}
+
+function retentionLabel(item) {
+  if (item.is_permanent) return "Permanent";
+  if (item.status === "completed" && item.file_url) {
+    const days = Number(item.retention_days || 7);
+    return days > 0 ? `Auto-delete in ${days} days` : "Auto-delete off";
+  }
+  return null;
 }
 
 function downloadSettingsSummary() {
@@ -316,10 +326,12 @@ function renderAboutInfo() {
   const rows = [
     ["App Name", APP_NAME],
     ["Interface", APP_SUBTITLE],
-    ["Pulliku version", payload.version || "0.1.0"],
+    ["Pulliku version", payload.version || "0.1.1"],
     ["GitHub SHA", shortSha],
     ["Build date", payload.build_date || "unknown"],
     ["Data directory", payload.data_dir || "unknown"],
+    ["Download directory", payload.download_dir || "unknown"],
+    ["File retention", `${payload.file_retention_days ?? 7} days`],
     ["Database status", payload.database_status || "unknown"],
     ["Setup state", payload.setup_state || "unknown"],
     ["Health status", payload.status || "unknown"],
@@ -396,7 +408,7 @@ function renderDownloads() {
       const canDelete = item.status !== "running";
       const progress = Math.max(0, Math.min(100, item.progress || 0));
       const size = formatBytes(item.file_size);
-      const detail = [settingsLabel(item.settings), size, item.speed, item.eta ? `ETA ${item.eta}` : null, formatDate(item.created_at)]
+      const detail = [settingsLabel(item.settings), size, retentionLabel(item), item.speed, item.eta ? `ETA ${item.eta}` : null, formatDate(item.created_at)]
         .filter(Boolean)
         .join(" - ");
       return `
@@ -408,7 +420,7 @@ function renderDownloads() {
             </div>
             <span class="status-chip ${escapeHtml(item.status)}">${escapeHtml(item.status)}</span>
           </div>
-          <div class="progress-track"><div class="progress-bar" data-progress="${progress}"></div></div>
+          <div class="progress-track"><progress class="progress-bar" value="${progress}" max="100" aria-label="Download progress"></progress></div>
           ${item.error ? `<div class="meta">${escapeHtml(item.error)}</div>` : ""}
           <div class="card-actions">
             ${
@@ -423,16 +435,18 @@ function renderDownloads() {
                 : ""
             }
             ${canCancel ? `<button class="psu-button psu-button--tonal" type="button" data-action="cancel" data-id="${item.id}">Stop</button>` : ""}
-            ${canDelete ? `<button class="psu-button psu-button--text" type="button" data-action="delete" data-id="${item.id}">Remove</button>` : ""}
+            ${
+              item.status === "completed" && item.file_url
+                ? `<button class="psu-button psu-button--tonal" type="button" data-action="permanent" data-id="${item.id}" data-permanent="${item.is_permanent ? "false" : "true"}">${item.is_permanent ? "7 days" : "Permanent"}</button>`
+                : ""
+            }
+            ${canDelete ? `<button class="psu-button psu-button--text" type="button" data-action="delete" data-id="${item.id}">Delete file</button>` : ""}
           </div>
         </article>
       `;
     })
     .join("");
 
-  $$(".progress-bar").forEach((bar) => {
-    bar.style.width = `${bar.dataset.progress}%`;
-  });
 }
 
 function renderUsers() {
@@ -595,6 +609,11 @@ $("#downloadList").addEventListener("click", async (event) => {
   try {
     if (button.dataset.action === "cancel") {
       await api(`/api/downloads/${id}/cancel`, { method: "POST" });
+    } else if (button.dataset.action === "permanent") {
+      await api(`/api/downloads/${id}/permanent`, {
+        method: "POST",
+        body: JSON.stringify({ is_permanent: button.dataset.permanent === "true" }),
+      });
     } else if (button.dataset.action === "delete") {
       await api(`/api/downloads/${id}`, { method: "DELETE" });
     }
