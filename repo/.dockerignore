@@ -1,8 +1,0 @@
-data
-downloads
-secrets
-__pycache__
-*.pyc
-.venv
-node_modules
-.git

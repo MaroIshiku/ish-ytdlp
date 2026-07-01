@@ -1,1 +1,0 @@
-HINWEIS: Diese Datei ist veraltet. Nutze in diesem Paket stattdessen `prompts/codex_master_prompt_pixel_soft_utility_v4.txt` und `prompts/codex_new_app_prompt_template_v4.txt`.

@@ -16,7 +16,7 @@ services:
       ISHIKU_DATA_DIR: /data
       DOWNLOAD_DIR: /downloads
       ISHIKU_SETUP_SECRET_FILE: ""
-      ISHIKU_SETUP_SECRET: "replace-with-a-long-random-setup-secret"
+      ISHIKU_SETUP_SECRET: ""
       ISHIKU_LOG_LEVEL: info
       PULLIKU_FILE_RETENTION_DAYS: 7
       PULLIKU_CLEANUP_INTERVAL_SECONDS: 3600

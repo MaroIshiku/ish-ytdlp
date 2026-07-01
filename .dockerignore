@@ -1,0 +1,17 @@
+data
+downloads
+secrets
+__pycache__
+*.pyc
+.venv
+node_modules
+.git
+.env
+.env.*
+.agents
+.docker-local
+.docker-test
+.tools
+.testdata
+.testdownloads
+.test-pydeps
